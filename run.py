@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import json
+import signal
 import subprocess
 import argparse
 import threading
@@ -21,20 +22,43 @@ from server.app import run_server
 from tunnel import cloudflare
 from tunnel.keepalive import keep_alive_ping
 
-LOGO = r"""
-╔══════════════════════════════════════════════════════════╗
-║                                                         ║
-║   ██████╗██╗      █████╗ ██████╗  █████╗ ███╗   ██╗     ║
-║  ██╔════╝██║     ██╔══██╗██╔══██╗██╔══██╗████╗  ██║     ║
-║  ██║     ██║     ███████║██║  ██║███████║██╔██╗ ██║     ║
-║  ██║     ██║     ██╔══██║██║  ██║██╔══██║██║╚██╗██║     ║
-║  ╚██████╗███████╗██║  ██║██████╔╝██║  ██║██║ ╚████║     ║
-║   ╚═════╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝     ║
-║                                                         ║
-║        O L L A M A   P R O X Y   S E R V E R            ║
-║                                                         ║
-╚══════════════════════════════════════════════════════════╝
-"""
+LOGO_LINES = [
+    "",
+    "  ╔═══════════════════════════════════════════════════════════════╗",
+    "  ║ ███████╗██╗   ██╗███████╗██╗      ██╗     █████╗ ████████╗██╗ ║",
+    "  ║ ██╔════╝╚██╗ ██╔╝██╔════╝██║      ██║    ██╔══██╗╚══██╔══╝██║ ║",
+    "  ║ █████╗   ╚████╔╝ █████╗  ██║      ██║    ███████║   ██║   ██║ ║",
+    "  ║ ██╔══╝    ╚██╔╝  ██╔══╝  ██║      ██║    ██╔══██║   ██║   ║═╣ ",
+    "  ║ ███████╗   ██║   ███████╗███████╗ ██║    ██║  ██║   ██║   ██║╚╝",
+    "  ║ ╚══════╝   ╚═╝   ╚══════╝╚══════╝ ╚═╝    ╚═╝  ╚═╝   ╚═╝   ╚═╝  ",
+    "  ║                                                                 ║",
+    "  ║      ▄▄▄· ▐ ▄ ▄ •   ▄ •    .▄▄ ·  ▄• ▄ ▄• ▄ ▐ ▄  ·▄▄▄▄        ║",
+    "  ║    ▪▪▄███·█▄▄▓████• █•▌   ▐█ ▀. █▪▪▐▄█▪▪▐▄█▀▄. ••▪▪▄▄▄·       ║",
+    "  ║    ▐█▐▐▐▌▪▐▄▄▌██▄▄  ▄▀▀   ▄▀▀▀█▄█▄▀▀ █▄▀▀ █▐▀▐▄·▄█▐▄▌·       ║",
+    "  ║    ██▐█▌▪█▓▐▀▀▪▐▀▀▌ █•    ▐█▄▄▌█▐▀▪▄█▀▀▪ █▐▐▐▀·▐█▐▀▀        ║",
+    "  ║    ·▀ █▪▀ ▀·▄▄▄▄▄• ▄    ·▀▀▀ ▀▀  ▀▀▄▄▄▄·█▀· █·▀ ▀▀▀ .▄▄▄▄   ║",
+    "  ║                                                                 ║",
+    "  ║            P R O X Y   ·   K A G G L E   G P U               ║",
+    "  ║                                                                 ║",
+    "  ╚═══════════════════════════════════════════════════════════════╝",
+    "",
+]
+
+
+def is_notebook():
+    """Detect if running inside Jupyter/Kaggle notebook."""
+    try:
+        get_ipython  # noqa: F821
+        return True
+    except NameError:
+        return False
+
+
+def animate_logo():
+    """Print logo line by line with animation effect."""
+    for line in LOGO_LINES:
+        print(line, flush=True)
+        time.sleep(0.05)
 
 
 def parse_args():
@@ -236,10 +260,11 @@ def shutdown(ollama_process):
 def main():
     args = parse_args()
     apply_config_overrides(args)
+    running_in_notebook = is_notebook()
     ollama_process = None
 
     try:
-        print(LOGO)
+        animate_logo()
 
         if not args.skip_install:
             run_install_script()
@@ -272,8 +297,11 @@ def main():
         else:
             logger.error("❌ Tunnel not ready yet")
 
-        while True:
-            time.sleep(1)
+        if running_in_notebook:
+            logger.info("📓 Jupyter detected — releasing cell, server runs in background")
+        else:
+            while True:
+                time.sleep(1)
 
     except KeyboardInterrupt:
         shutdown(ollama_process)

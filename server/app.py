@@ -141,16 +141,15 @@ async def openai_compatible(request: Request):
     start_time = time.time()
 
     try:
-        async with http_client.post(f"{config.OLLAMA_BASE_URL}/api/chat", json=ollama_payload) as resp:
-            if resp.status_code != 200:
-                err_body = await resp.aread()
-                logger.error(f"[{request_id}] ❌ Ollama HTTP {resp.status_code}")
-                return JSONResponse(
-                    content={"error": {"message": f"Ollama returned HTTP {resp.status_code}", "type": "upstream_error"}},
-                    status_code=502,
-                )
+        resp = await http_client.post(f"{config.OLLAMA_BASE_URL}/api/chat", json=ollama_payload)
+        if resp.status_code != 200:
+            logger.error(f"[{request_id}] ❌ Ollama HTTP {resp.status_code}")
+            return JSONResponse(
+                content={"error": {"message": f"Ollama returned HTTP {resp.status_code}", "type": "upstream_error"}},
+                status_code=502,
+            )
 
-            data = json_loads(await resp.aread())
+        data = json_loads(resp.read())
 
             if "error" in data:
                 logger.error(f"[{request_id}] ❌ Ollama error: {data['error']}")

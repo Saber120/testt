@@ -195,7 +195,7 @@ def warm_model():
 def keep_model_warm():
     """Periodically send a request to keep the model loaded in GPU."""
     while True:
-        time.sleep(config.KEEP_ALIVE.replace("m", "").replace("s", "").replace("h", ""))
+        time.sleep(int(config.KEEP_ALIVE.replace("m", "").replace("s", "").replace("h", "")))
         try:
             payload = json.dumps({
                 "model": config.OLLAMA_MODEL,

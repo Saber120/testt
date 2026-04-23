@@ -151,66 +151,66 @@ async def openai_compatible(request: Request):
 
         data = json_loads(resp.read())
 
-            if "error" in data:
-                logger.error(f"[{request_id}] ❌ Ollama error: {data['error']}")
-                return JSONResponse(
-                    content={"error": {"message": f"Ollama Internal Error: {data['error']}", "type": "upstream_error"}},
-                    status_code=500,
-                )
+        if "error" in data:
+            logger.error(f"[{request_id}] ❌ Ollama error: {data['error']}")
+            return JSONResponse(
+                content={"error": {"message": f"Ollama Internal Error: {data['error']}", "type": "upstream_error"}},
+                status_code=500,
+            )
 
-            message = data.get("message", {})
-            content = extract_text_content(message.get("content"))
-            thinking = message.get("thinking", "")
+        message = data.get("message", {})
+        content = extract_text_content(message.get("content"))
+        thinking = message.get("thinking", "")
 
-            delta = {}
-            if thinking:
-                delta["reasoning_content"] = thinking
-            delta["content"] = content or ""
+        delta = {}
+        if thinking:
+            delta["reasoning_content"] = thinking
+        delta["content"] = content or ""
 
-            if "tool_calls" in message and message["tool_calls"]:
-                tool_calls = []
-                for idx, tc in enumerate(message["tool_calls"]):
-                    func = tc.get("function", {})
-                    args = func.get("arguments", {})
-                    if isinstance(args, dict):
-                        args = json_dumps(args)
-                    tool_calls.append({
-                        "index": idx,
-                        "id": tc.get("id", f"call_{uuid.uuid4().hex[:8]}"),
-                        "type": "function",
-                        "function": {"name": func.get("name", ""), "arguments": args}
-                    })
-                delta["tool_calls"] = tool_calls
+        if "tool_calls" in message and message["tool_calls"]:
+            tool_calls = []
+            for idx, tc in enumerate(message["tool_calls"]):
+                func = tc.get("function", {})
+                args = func.get("arguments", {})
+                if isinstance(args, dict):
+                    args = json_dumps(args)
+                tool_calls.append({
+                    "index": idx,
+                    "id": tc.get("id", f"call_{uuid.uuid4().hex[:8]}"),
+                    "type": "function",
+                    "function": {"name": func.get("name", ""), "arguments": args}
+                })
+            delta["tool_calls"] = tool_calls
 
-            elapsed = time.time() - start_time
-            tokens_count = data.get("eval_count", 0)
-            logger.info(f"[{request_id}] ✅ Done (non-stream) | {tokens_count} toks | {elapsed:.1f}s")
+        elapsed = time.time() - start_time
+        tokens_count = data.get("eval_count", 0)
+        logger.info(f"[{request_id}] ✅ Done (non-stream) | {tokens_count} toks | {elapsed:.1f}s")
 
-            finish_reason = "tool_calls" if delta.get("tool_calls") else "stop"
+        finish_reason = "tool_calls" if delta.get("tool_calls") else "stop"
 
-            response_body = {
-                "id": f"chatcmpl-{request_id}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": model_name,
-                "choices": [{
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": delta.get("content", ""),
-                        **({"reasoning_content": delta["reasoning_content"]} if "reasoning_content" in delta else {}),
-                        **({"tool_calls": delta["tool_calls"]} if "tool_calls" in delta else {}),
-                    },
-                    "finish_reason": finish_reason,
-                }],
-                "usage": {
-                    "prompt_tokens": data.get("prompt_eval_count", 0),
-                    "completion_tokens": tokens_count,
-                    "total_tokens": data.get("prompt_eval_count", 0) + tokens_count,
+        response_body = {
+            "id": f"chatcmpl-{request_id}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model_name,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": delta.get("content", ""),
+                    **({"reasoning_content": delta["reasoning_content"]} if "reasoning_content" in delta else {}),
+                    **({"tool_calls": delta["tool_calls"]} if "tool_calls" in delta else {}),
                 },
-            }
+                "finish_reason": finish_reason,
+            }],
+            "usage": {
+                "prompt_tokens": data.get("prompt_eval_count", 0),
+                "completion_tokens": tokens_count,
+                "total_tokens": data.get("prompt_eval_count", 0) + tokens_count,
+            },
+        }
 
-            return JSONResponse(content=response_body)
+        return JSONResponse(content=response_body)
 
     except httpx.ReadTimeout:
         logger.error(f"[{request_id}] ❌ ReadTimeout")

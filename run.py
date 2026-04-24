@@ -226,16 +226,41 @@ def start_ollama():
 
 
 def pull_model():
-    """Pull the Ollama model with progress bar."""
-    bar = ProgressBar(f"Pulling {config.OLLAMA_MODEL}")
-    result = subprocess.run(
+    """Pull the Ollama model with real progress from Ollama's JSON output."""
+    print(f"\n  ⬇️  Pulling model: {config.OLLAMA_MODEL}")
+    proc = subprocess.Popen(
         ["ollama", "pull", config.OLLAMA_MODEL],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    if result.returncode == 0:
-        bar.done("Model ready")
-    else:
-        bar.done("Model already present (or pull skipped)")
+    last_pct = -1
+    last_status = ""
+    raw = proc.stderr.readline()
+    while raw:
+        line = raw.decode("utf-8", errors="replace").strip()
+        if line:
+            try:
+                data = json.loads(line)
+                total = data.get("total", 0)
+                completed = data.get("completed", 0)
+                status = data.get("status", "")
+                if total and completed:
+                    pct = int(completed * 100 / total)
+                    mb_done = completed // (1024 * 1024)
+                    mb_total = total // (1024 * 1024)
+                    msg = f"  ⬇️  {config.OLLAMA_MODEL}: {status}  {mb_done}MB/{mb_total}MB ({pct}%)"
+                else:
+                    pct = -1
+                    msg = f"  ⬇️  {config.OLLAMA_MODEL}: {status}"
+                if pct != last_pct or status != last_status:
+                    print(f"\r{msg}", end="", flush=True)
+                    last_pct = pct
+                    last_status = status
+            except json.JSONDecodeError:
+                print(f"\r  ⬇️  {config.OLLAMA_MODEL}: {line}", end="", flush=True)
+        raw = proc.stderr.readline()
+
+    proc.wait()
+    print(f"\r  ✅ {config.OLLAMA_MODEL} ready\n", flush=True)
 
 
 def warm_model():
@@ -391,16 +416,29 @@ def main():
     animate_logo()
 
     if running_in_notebook or args.detach:
-        # ── Detach mode: start everything in a daemon thread, return immediately ──
+        # ── Detach mode: start everything in a background thread, wait for readiness ──
         bg = threading.Thread(target=_run_everything, daemon=True)
         bg.start()
-        print("  📓 Running in background — cell/terminal is free.\n")
-        print("  Your server will appear at:")
-        print("  http://localhost:8000/v1")
-        print("  (Cloudflare tunnel URL will be printed by the server)")
-        print()
-        # Small delay so logs are visible before cell returns
-        time.sleep(2)
+        print("  📓 Starting in background...\n")
+
+        # Wait up to 90s for the server to be reachable
+        import urllib.request as _ur
+        ready = False
+        for _ in range(90):
+            time.sleep(1)
+            try:
+                _ur.urlopen("http://127.0.0.1:8000/health", timeout=2)
+                ready = True
+                break
+            except Exception:
+                pass
+
+        if ready:
+            print("  📓 Server ready — cell/terminal is free.\n")
+            print("  Local:  http://localhost:8000/v1")
+            print("  Tunnel: check logs for Cloudflare URL\n")
+        else:
+            print("  ⚠️  Server did not become ready in 90s (still starting).\n")
         return
 
     # ── Attached mode: block and run forever ──

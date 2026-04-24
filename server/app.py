@@ -83,7 +83,7 @@ async def list_models():
     return JSONResponse(content={"object": "list", "data": models})
 
 
-def _get_ollama_model_name(requested_name: str) -> str:
+async def _get_ollama_model_name(requested_name: str) -> str:
     """Map a requested model name to an actual Ollama model, pulling if needed.
 
     Falls back to config.OLLAMA_MODEL if the requested model is unavailable.
@@ -93,7 +93,7 @@ def _get_ollama_model_name(requested_name: str) -> str:
 
     # Quick check: is the model already loaded?
     try:
-        resp = http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
+        resp = await http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
         tags = json_loads(resp.read())
         for m in tags.get("models", []):
             if m.get("name") == requested_name:
@@ -101,15 +101,44 @@ def _get_ollama_model_name(requested_name: str) -> str:
     except Exception:
         pass
 
-    # Not found — try to pull it
+    # Not found — try to pull it (streaming progress)
     logger.info(f"🔻 Model '{requested_name}' not local, pulling...")
     try:
-        resp = http_client.post(
+        async with http_client.stream(
+            "POST",
             f"{config.OLLAMA_BASE_URL}/api/pull",
             json={"name": requested_name},
             timeout=600,
-        )
-        if resp.status_code == 200:
+        ) as pull_resp:
+            if pull_resp.status_code != 200:
+                logger.warning(f"⚠️ Pull returned HTTP {pull_resp.status_code}")
+                return config.OLLAMA_MODEL
+
+            last_pct = -1
+            last_status = ""
+            while True:
+                chunk = await pull_resp.areceive()
+                if not chunk:
+                    break
+                try:
+                    line = json_loads(chunk)
+                    total = line.get("total", 0)
+                    completed = line.get("completed", 0)
+                    status = line.get("status", "")
+                    if total and completed:
+                        pct = int(completed * 100 / total)
+                    else:
+                        pct = -1
+                    if pct != last_pct or status != last_status:
+                        if pct >= 0:
+                            logger.info(f"  ⬇️  {requested_name}: {status} ({pct}%)")
+                        else:
+                            logger.info(f"  ⬇️  {requested_name}: {status}")
+                        last_pct = pct
+                        last_status = status
+                except Exception:
+                    pass
+
             logger.info(f"✅ Model '{requested_name}' pulled successfully")
             return requested_name
     except Exception as exc:
@@ -139,7 +168,7 @@ async def openai_compatible(request: Request):
     stream = body.get("stream", True)
 
     # Resolve the actual Ollama model name (pull if needed, fallback otherwise)
-    actual_model = _get_ollama_model_name(model_name)
+    actual_model = await _get_ollama_model_name(model_name)
 
     ollama_payload = {
         "model": actual_model,

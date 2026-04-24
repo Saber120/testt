@@ -14,235 +14,15 @@ import argparse
 import threading
 import urllib.request
 import urllib.error
-import shutil
-import math
 
 import config
 from server.utils import logger
 from server.app import run_server
 from tunnel import cloudflare
 from tunnel.keepalive import keep_alive_ping
-
-# ─── Animated Logo ─────────────────────────────────────────────────────────────
-
-LOGO_FRAMES = [
-    r"""
-          __     __   __    ______   __    __    __    ______   __   __
-         /  \   /  \ /  \  /      \ /  |  /  |  /  \  /      \ /  | /  |
-        /    \ /    /    \/  _____//   | /  /| /    \/  ____  \/  |/  /|
-       /  /  |/  /|  /\   /\      ||  / /  / |/  /\   /      /|  / /  |/
-      /  /    /  | /  | /  | \   \/  | /  /   /  | /  |  /  / /  |/  | /
-     /__/    /__/|__/ |/__/  \____|/__/|__/   /__/|/__/  |__/ /__/|__/|/
-     \      \   \    \       \     \   \     \    \     \     \   \    \
-      \      \   \    \       \     \   \     \    \     \     \   \    \
-       \______\___\____\_______\_____\___\______\____\_____\_____\___\____\
-    """,
-    r"""
-     ███████╗██╗  ██╗   ██╗██╗  ██╗████████╗██╗   ██╗███╗   ██╗
-     ██╔════╝██║  ██║   ██║██║ ██╔╝╚══██╔══╝██║   ██║████╗  ██║
-     █████╗  ███████║   ██║█████╔╝    ██║   ██║   ██║██╔██╗ ██║
-     ██╔══╝  ██╔══██║   ██║██╔═██╗    ██║   ██║   ██║██║╚██╗██║
-     ██║     ██║  ██║   ██║██║  ██╗   ██║   ╚██████╔╝██║ ╚████║
-     ╚═╝     ╚═╝  ╚═╝   ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝
-    """,
-    r"""
-    ▄▀▀ █▀▀ █░█ █▀▀  █░█ █░█ █▀▀  ▄▀▀ █▀▀ █▀▄ █▀█ █░█ █▀▀
-    █░░ █░█ █▀█ █▀▀  █░█ █▄█ ▀▀█  █░░ █░░ █▀▄ █▀▀ █▀█ █▀▀
-    ▀▀▀ ▀▀▀ ▀░▀ ▀▀▀  ▀▀▀ ▀░▀ ▀▀▀  ▀▀▀ ▀▀▀ ▀▀░ ▀░░ ▀░▀ ▀▀▀
-    """,
-    r"""
-       ╔═══╗╔═╗╔═╗╔═══╗╔═══╗╔═══╗╔═══╗╔═══╗
-       ║   ║║╔╣║╔╗║╚══╝║╔══╝║╔══╝║╔══╝║╔══╝
-       ╚══╗║║║║╚╝║╔══╗╚╝╔╗ ║║╔═╗╚╝╔╗ ║╚══╗
-       ╔══╝║║║║  ║║  ║  ║║ ║║╚═╝  ║║ ║╔══╝
-       ╚═══╝╚╝╚╝ ╚══╝  ╚╝ ║╚══╝  ╚╝ ║╚═══╗
-                          ╚══════════╝
-    """,
-]
-
-
-def animate_logo():
-    """Animated terminal logo with fade-in effect."""
-    os.system("clear" if os.name != "nt" else "cls")
-
-    final = r"""
-    ╔══════════════════════════════════════════════════════════════════════════════╗
-    ║                                                                            ║
-    ║   ███████╗██╗  ██╗   ██╗██╗  ██╗████████╗██╗   ██╗███╗   ██╗               ║
-    ║   ██╔════╝██║  ██║   ██║██║ ██╔╝╚══██╔══╝██║   ██║████╗  ██║               ║
-    ║   █████╗  ███████║   ██║█████╔╝    ██║   ██║   ██║██╔██╗ ██║               ║
-    ║   ██╔══╝  ██╔══██║   ██║██╔═██╗    ██║   ██║   ██║██║╚██╗██║               ║
-    ║   ██║     ██║  ██║   ██║██║  ██╗   ██║   ╚██████╔╝██║ ╚████║               ║
-    ║   ╚═╝     ╚═╝  ╚═╝   ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝               ║
-    ║                                                                            ║
-    ║   ▄▀▀ █▀▀ █░█ █▀▀  ▄▀▀ █▀▀ █▀▄ █▀█ █░█   OpenAI-Compatible Proxy        ║
-    ║   █░░ █░█ █▀█ █▀▀  █░░ █░░ █▀▄ █▀▀ █▀█   Kaggle GPU → Public API        ║
-    ║   ▀▀▀ ▀▀▀ ▀░▀ ▀▀▀  ▀▀▀ ▀▀▀ ▀▀░ ▀░░ ▀░▀                                 ║
-    ║                                                                            ║
-    ║   🚀 Free LLM API for VS Code, Cursor, OpenCode, Claude Code, and more     ║
-    ║                                                                            ║
-    ╚══════════════════════════════════════════════════════════════════════════════╝"""
-
-    for frame in LOGO_FRAMES:
-        print(frame)
-        time.sleep(0.3)
-        print("\033[F" * frame.count("\n"), end="\r\n" * frame.count("\n"))
-
-    for i in range(0, len(final) + 1, 12):
-        chunk = final[i:i + 12]
-        if chunk:
-            print(chunk, end="", flush=True)
-            time.sleep(0.02)
-    print("\n")
-
-
-# ─── Progress Bar ──────────────────────────────────────────────────────────────
-
-class ProgressBar:
-    """Simple terminal progress bar."""
-
-    def __init__(self, label, length=30):
-        self.label = label
-        self.length = length
-        self._width = shutil.get_terminal_size((80, 24)).columns or 80
-        self._update(0, "...")
-
-    def _update(self, pct, status=""):
-        filled = int(self.length * pct / 100)
-        bar = "█" * filled + "░" * (self.length - filled)
-        line = f"  [{bar}] {pct:3d}%  {status}"
-        pad = max(0, self._width - len(line) - 1)
-        print(f"\r{line}{' ' * pad}", end="", flush=True)
-
-    def step(self, pct, status=""):
-        self._update(pct, status)
-
-    def done(self, status="Done"):
-        self._update(100, status)
-        print()
-
-    def fail(self, status="Failed"):
-        self._update(100, f"❌ {status}")
-        print()
-
-
-def _download_with_progress(url, dest, label="Downloading"):
-    """Download a file with a progress bar."""
-    bar = ProgressBar(label)
-    try:
-        with urllib.request.urlopen(url) as resp:
-            total = int(resp.headers.get("Content-Length", 0))
-            downloaded = 0
-            with open(dest, "wb") as f:
-                while True:
-                    chunk = resp.read(8192)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total:
-                        pct = min(100, int(downloaded * 100 / total))
-                        bar.step(pct, f"{downloaded // 1024 // 1024}MB / {total // 1024 // 1024}MB")
-                    else:
-                        bar.step(50, f"{downloaded // 1024 // 1024}MB")
-            bar.done(f"{label} complete")
-    except Exception:
-        bar.fail(label)
-
-
-def _run_with_progress(cmd, label, shell=False):
-    """Run a command with a progress bar (shows elapsed time as proxy)."""
-    bar = ProgressBar(label)
-    start = time.time()
-    try:
-        result = subprocess.run(
-            cmd, shell=shell,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        bar.done(f"✅ {label}")
-        return result
-    except Exception:
-        bar.fail(label)
-        return None
-
-
-# ─── Install ──────────────────────────────────────────────────────────────────
-
-def _is_installed(name):
-    """Check if a system binary is available."""
-    return shutil.which(name) is not None
-
-
-def _pip_packages_present():
-    """Check if required Python packages are already installed."""
-    import importlib
-    for pkg in ("fastapi", "uvicorn", "httpx", "orjson", "uvloop"):
-        try:
-            importlib.import_module(pkg)
-        except ImportError:
-            return False
-    return True
-
-
-def run_install_script():
-    """Install all dependencies with progress bars (skips if already installed)."""
-    print("\n  ── Installing dependencies ──\n")
-
-    # 1. apt-get update (only if ollama or zstd missing)
-    if not _is_installed("ollama") or not _is_installed("zstd"):
-        bar = ProgressBar("Updating apt")
-        subprocess.run(["sudo", "apt-get", "update", "-qq"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        bar.done("apt updated")
-    else:
-        print("  ✅ apt already up to date")
-
-    # 2. Install zstd
-    if not _is_installed("zstd"):
-        bar = ProgressBar("Installing zstd")
-        subprocess.run(["sudo", "apt-get", "install", "-y", "-qq", "zstd"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        bar.done("zstd installed")
-    else:
-        print("  ✅ zstd already installed")
-
-    # 3. Install Ollama
-    if not _is_installed("ollama"):
-        bar = ProgressBar("Installing Ollama")
-        subprocess.run(
-            "curl -fsSL https://ollama.com/install.sh | sh",
-            shell=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-        )
-        bar.done("Ollama installed")
-    else:
-        print("  ✅ Ollama already installed")
-
-    # 4. Download cloudflared (skip if binary exists and is executable)
-    cf_path = config.CLOUDFLARED_BINARY
-    if not (os.path.exists(cf_path) and os.access(cf_path, os.X_OK)):
-        bar = ProgressBar("Downloading cloudflared")
-        try:
-            _download_with_progress(config.CLOUDFLARED_URL, cf_path)
-            os.chmod(cf_path, 0o755)
-            bar.done("cloudflared downloaded")
-        except Exception:
-            bar.fail("cloudflared download")
-    else:
-        print("  ✅ cloudflared already downloaded")
-
-    # 5. Python packages
-    if not _pip_packages_present():
-        bar = ProgressBar("Installing Python deps")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q",
-             "fastapi", "uvicorn", "httpx", "orjson", "uvloop", "httptools"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-        )
-        bar.done("Python packages ready")
-    else:
-        print("  ✅ Python packages already installed")
-    print()
+from logo import animate_logo
+from progress import ProgressBar
+from installer import run_install_script
 
 
 # ─── Ollama ───────────────────────────────────────────────────────────────────
@@ -251,7 +31,11 @@ def start_ollama():
     """Start Ollama serve as a background process."""
     bar = ProgressBar("Starting Ollama")
     devnull = open(os.devnull, "w")
-    process = subprocess.Popen(["ollama", "serve"], stdout=devnull, stderr=devnull)
+    try:
+        process = subprocess.Popen(["ollama", "serve"], stdout=devnull, stderr=devnull)
+    except Exception:
+        devnull.close()
+        raise
     time.sleep(3)
     bar.done("Ollama running on :11434")
     devnull.close()
@@ -297,22 +81,26 @@ def pull_model():
     print(f"\r  ✅ {config.OLLAMA_MODEL} ready\n", flush=True)
 
 
-def warm_model():
-    """Load model into GPU memory."""
-    bar = ProgressBar(f"Warming {config.OLLAMA_MODEL}")
+def _warm_request(model, timeout=300):
+    """Send a warm request to keep the model loaded in GPU memory."""
     payload = json.dumps({
-        "model": config.OLLAMA_MODEL,
+        "model": model,
         "prompt": ".",
         "options": {"num_predict": 1},
     }).encode()
-
     req = urllib.request.Request(
         f"{config.OLLAMA_BASE_URL}/api/generate",
         data=payload, headers={"Content-Type": "application/json"}, method="POST",
     )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        resp.read()
+
+
+def warm_model():
+    """Load model into GPU memory."""
+    bar = ProgressBar(f"Warming {config.OLLAMA_MODEL}")
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            resp.read()
+        _warm_request(config.OLLAMA_MODEL, timeout=300)
         bar.done("Model loaded into GPU")
     except Exception as e:
         bar.fail(f"warm failed: {e}")
@@ -353,51 +141,36 @@ def keep_model_warm():
             wait_seconds = int(duration_str)
         time.sleep(wait_seconds)
         try:
-            payload = json.dumps({
-                "model": config.OLLAMA_MODEL,
-                "prompt": ".",
-                "options": {"num_predict": 1},
-            }).encode()
-            req = urllib.request.Request(
-                f"{config.OLLAMA_BASE_URL}/api/generate",
-                data=payload, headers={"Content-Type": "application/json"}, method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                resp.read()
+            _warm_request(config.OLLAMA_MODEL, timeout=60)
         except Exception:
             pass
 
 
 # ─── Shutdown ─────────────────────────────────────────────────────────────────
 
+def _safe_terminate(proc):
+    """Terminate a process, killing it if it doesn't respond."""
+    if proc is None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+    except OSError:
+        pass
+
+
 def shutdown(ollama_process):
     """Gracefully shut down all components."""
     logger.info("🛑 Shutting down...")
-    if cloudflare.tunnel_process:
-        try:
-            cloudflare.tunnel_process.terminate()
-            cloudflare.tunnel_process.wait(timeout=5)
-        except (subprocess.TimeoutExpired, OSError):
-            pass
-    if ollama_process:
-        try:
-            ollama_process.terminate()
-            ollama_process.wait(timeout=5)
-        except (subprocess.TimeoutExpired, OSError):
-            pass
+    _safe_terminate(cloudflare.tunnel_process)
+    _safe_terminate(ollama_process)
     logger.info("✅ Shutdown complete")
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
-
-def is_notebook():
-    """Detect if running inside Jupyter/Kaggle notebook."""
-    try:
-        get_ipython  # noqa: F821
-        return True
-    except NameError:
-        return False
-
 
 def parse_args():
     """Parse command-line arguments for config overrides."""
@@ -411,8 +184,6 @@ def parse_args():
                         help="Disable thinking mode")
     parser.add_argument("--skip-install", action="store_true", default=False,
                         help="Skip dependency installation")
-    parser.add_argument("--detach", action="store_true", default=False,
-                        help="Run in background (detach from cell/terminal)")
     return parser.parse_args()
 
 
@@ -442,7 +213,7 @@ def _run_everything():
 
     ollama_process = start_ollama()
 
-    # Start the FastAPI server early so health checks pass in detach mode
+    # Start the FastAPI server early so health checks pass in notebook mode
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
     time.sleep(2)
@@ -479,57 +250,9 @@ def main():
     args = parse_args()
     apply_config_overrides(args)
     SKIP_INSTALL = args.skip_install
-    running_in_notebook = is_notebook()
 
     animate_logo()
 
-    if running_in_notebook or args.detach:
-        # ── Detach mode: start everything in a background thread, wait for readiness ──
-        bg = threading.Thread(target=_run_everything, daemon=True)
-        bg.start()
-        print("  📓 Starting in background...\n")
-
-        # Wait up to 90s for the server to be ready
-        import urllib.request as _ur
-        server_ready = False
-        deadline = time.time() + 90
-        for _ in range(90):
-            time.sleep(1)
-            try:
-                _ur.urlopen("http://127.0.0.1:8000/health", timeout=2)
-                server_ready = True
-                break
-            except Exception:
-                pass
-            if time.time() > deadline:
-                break
-
-        # Wait extra time for tunnel to establish
-        tunnel_wait = min(30, max(0, deadline - time.time() + 15))
-        for _ in range(int(tunnel_wait)):
-            time.sleep(1)
-            if cloudflare.public_url:
-                break
-
-        if server_ready:
-            print("  📓 Server ready — cell/terminal is free.\n")
-            print(f"  Local:  http://localhost:{config.SERVER_PORT}/v1")
-            if cloudflare.public_url:
-                print(f"  Public: {cloudflare.public_url}/v1")
-            else:
-                # Try reading tunnel_url.txt as last resort
-                try:
-                    with open("tunnel_url.txt") as f:
-                        url = f.read().strip()
-                    print(f"  Public: {url}/v1")
-                except Exception:
-                    print("  Public: tunnel still establishing (check tunnel_url.txt)")
-            print()
-        else:
-            print("  ⚠️  Server did not become ready in 90s (still starting).\n")
-        return
-
-    # ── Attached mode: block and run forever ──
     ollama_process = None
     try:
         ollama_process = _run_everything()

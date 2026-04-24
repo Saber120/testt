@@ -1,4 +1,8 @@
-# Kaggle Ollama Proxy
+<p align="center">
+  <img src="cx.png" alt="Logo" width="200">
+</p>
+
+# RAGNAROK
 
 ## 💡 Idea
 
@@ -37,7 +41,10 @@ kaggle-ollama-proxy/
 ├── README.md              # This file
 ├── config.py              # All settings in one place
 ├── requirements.txt       # Python dependencies
-├── run.py                 # Main entry point (setup + orchestration)
+├── run.py                 # Main entry point (orchestration)
+├── logo.py                # Animated terminal logo
+├── progress.py            # Progress bar + download helpers
+├── installer.py           # Dependency installation logic
 ├── server/
 │   ├── __init__.py
 │   ├── app.py             # FastAPI app + lifespan + routes

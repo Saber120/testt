@@ -226,7 +226,7 @@ def start_ollama():
 
 
 def pull_model():
-    """Pull the Ollama model with real progress from Ollama's JSON output."""
+    """Pull the Ollama model with clean progress from Ollama's JSON output."""
     print(f"\n  ⬇️  Pulling model: {config.OLLAMA_MODEL}")
     proc = subprocess.Popen(
         ["ollama", "pull", config.OLLAMA_MODEL],
@@ -240,6 +240,9 @@ def pull_model():
         if line:
             try:
                 data = json.loads(line)
+            except json.JSONDecodeError:
+                pass
+            else:
                 total = data.get("total", 0)
                 completed = data.get("completed", 0)
                 status = data.get("status", "")
@@ -255,8 +258,6 @@ def pull_model():
                     print(f"\r{msg}", end="", flush=True)
                     last_pct = pct
                     last_status = status
-            except json.JSONDecodeError:
-                print(f"\r  ⬇️  {config.OLLAMA_MODEL}: {line}", end="", flush=True)
         raw = proc.stderr.readline()
 
     proc.wait()
@@ -421,9 +422,10 @@ def main():
         bg.start()
         print("  📓 Starting in background...\n")
 
-        # Wait up to 90s for the server + tunnel to be ready
+        # Wait up to 90s for the server to be ready
         import urllib.request as _ur
         server_ready = False
+        deadline = time.time() + 90
         for _ in range(90):
             time.sleep(1)
             try:
@@ -432,6 +434,15 @@ def main():
                 break
             except Exception:
                 pass
+            if time.time() > deadline:
+                break
+
+        # Wait extra time for tunnel to establish
+        tunnel_wait = min(30, max(0, deadline - time.time() + 15))
+        for _ in range(int(tunnel_wait)):
+            time.sleep(1)
+            if cloudflare.public_url:
+                break
 
         if server_ready:
             print("  📓 Server ready — cell/terminal is free.\n")
@@ -439,7 +450,13 @@ def main():
             if cloudflare.public_url:
                 print(f"  Public: {cloudflare.public_url}/v1")
             else:
-                print("  Public: tunnel still establishing (check tunnel_url.txt)")
+                # Try reading tunnel_url.txt as last resort
+                try:
+                    with open("tunnel_url.txt") as f:
+                        url = f.read().strip()
+                    print(f"  Public: {url}/v1")
+                except Exception:
+                    print("  Public: tunnel still establishing (check tunnel_url.txt)")
             print()
         else:
             print("  ⚠️  Server did not become ready in 90s (still starting).\n")

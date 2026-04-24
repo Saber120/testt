@@ -303,6 +303,7 @@ async def openai_compatible(request: Request):
 
 def run_server():
     logger.info(f"🚀 Starting FastAPI on {config.SERVER_HOST}:{config.SERVER_PORT}")
+    uvloop.install()
     uvicorn_config = uvicorn.Config(
         app,
         host=config.SERVER_HOST,
@@ -311,13 +312,10 @@ def run_server():
         access_log=config.UVICORN_ACCESS_LOG,
         timeout_keep_alive=config.UVICORN_TIMEOUT_KEEP_ALIVE,
         timeout_notify=config.UVICORN_TIMEOUT_NOTIFY,
+        http="httptools",
+        loop="uvloop",
     )
     server = uvicorn.Server(uvicorn_config)
-
-    try:
-        loop = uvloop.new_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-
+    loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(server.serve())

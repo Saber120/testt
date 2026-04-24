@@ -168,47 +168,80 @@ def _run_with_progress(cmd, label, shell=False):
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 
+def _is_installed(name):
+    """Check if a system binary is available."""
+    return shutil.which(name) is not None
+
+
+def _pip_packages_present():
+    """Check if required Python packages are already installed."""
+    import importlib
+    for pkg in ("fastapi", "uvicorn", "httpx", "orjson", "uvloop"):
+        try:
+            importlib.import_module(pkg)
+        except ImportError:
+            return False
+    return True
+
+
 def run_install_script():
-    """Install all dependencies with progress bars."""
+    """Install all dependencies with progress bars (skips if already installed)."""
     print("\n  ── Installing dependencies ──\n")
 
-    # 1. apt-get update
-    bar = ProgressBar("Updating apt")
-    subprocess.run(["sudo", "apt-get", "update", "-qq"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    bar.done("apt updated")
+    # 1. apt-get update (only if ollama or zstd missing)
+    if not _is_installed("ollama") or not _is_installed("zstd"):
+        bar = ProgressBar("Updating apt")
+        subprocess.run(["sudo", "apt-get", "update", "-qq"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        bar.done("apt updated")
+    else:
+        print("  ✅ apt already up to date")
 
     # 2. Install zstd
-    bar = ProgressBar("Installing zstd")
-    subprocess.run(["sudo", "apt-get", "install", "-y", "-qq", "zstd"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    bar.done("zstd installed")
+    if not _is_installed("zstd"):
+        bar = ProgressBar("Installing zstd")
+        subprocess.run(["sudo", "apt-get", "install", "-y", "-qq", "zstd"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        bar.done("zstd installed")
+    else:
+        print("  ✅ zstd already installed")
 
     # 3. Install Ollama
-    bar = ProgressBar("Installing Ollama")
-    subprocess.run(
-        "curl -fsSL https://ollama.com/install.sh | sh",
-        shell=True,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    )
-    bar.done("Ollama installed")
+    if not _is_installed("ollama"):
+        bar = ProgressBar("Installing Ollama")
+        subprocess.run(
+            "curl -fsSL https://ollama.com/install.sh | sh",
+            shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        bar.done("Ollama installed")
+    else:
+        print("  ✅ Ollama already installed")
 
-    # 4. Download cloudflared
-    bar = ProgressBar("Downloading cloudflared")
-    try:
-        _download_with_progress(config.CLOUDFLARED_URL, "cloudflared", "cloudflared")
-        os.chmod("cloudflared", 0o755)
-    except Exception:
-        bar.fail("cloudflared download")
+    # 4. Download cloudflared (skip if binary exists and is executable)
+    cf_path = config.CLOUDFLARED_BINARY
+    if not (os.path.exists(cf_path) and os.access(cf_path, os.X_OK)):
+        bar = ProgressBar("Downloading cloudflared")
+        try:
+            _download_with_progress(config.CLOUDFLARED_URL, cf_path)
+            os.chmod(cf_path, 0o755)
+            bar.done("cloudflared downloaded")
+        except Exception:
+            bar.fail("cloudflared download")
+    else:
+        print("  ✅ cloudflared already downloaded")
 
     # 5. Python packages
-    bar = ProgressBar("Installing Python deps")
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-q",
-         "fastapi", "uvicorn", "httpx", "orjson", "uvloop", "httptools"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-    )
-    bar.done("Python packages ready")
+    if not _pip_packages_present():
+        bar = ProgressBar("Installing Python deps")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q",
+             "fastapi", "uvicorn", "httpx", "orjson", "uvloop", "httptools"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        bar.done("Python packages ready")
+    else:
+        print("  ✅ Python packages already installed")
     print()
 
 
@@ -283,6 +316,27 @@ def warm_model():
         bar.done("Model loaded into GPU")
     except Exception as e:
         bar.fail(f"warm failed: {e}")
+
+
+def cleanup():
+    """Kill stale processes and reset global state for clean startup."""
+    logger.info("🧹 Cleaning up previous instances...")
+    subprocess.run(["pkill", "-f", "ollama serve"], capture_output=True)
+    subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
+    subprocess.run(["pkill", "-f", "uvicorn"], capture_output=True)
+    time.sleep(1)
+
+    # Reset tunnel state
+    cloudflare.tunnel_process = None
+    cloudflare.public_url = None
+
+    # Remove stale tunnel URL file
+    try:
+        os.remove("tunnel_url.txt")
+    except FileNotFoundError:
+        pass
+
+    logger.info("✅ Cleanup complete")
 
 
 def keep_model_warm():
@@ -384,14 +438,18 @@ def _run_everything():
     if not SKIP_INSTALL:
         run_install_script()
 
-    ollama_process = start_ollama()
-    pull_model()
-    warm_model()
+    cleanup()
 
+    ollama_process = start_ollama()
+
+    # Start the FastAPI server early so health checks pass in detach mode
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
-    time.sleep(3)
+    time.sleep(2)
     logger.info("✅ FastAPI is ready")
+
+    pull_model()
+    warm_model()
 
     watchdog_thread = threading.Thread(target=cloudflare.tunnel_watchdog, daemon=True)
     watchdog_thread.start()

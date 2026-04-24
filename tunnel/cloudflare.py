@@ -20,12 +20,7 @@ public_url = None
 
 
 def drain_process_output(proc, name="tunnel"):
-    """Drain stdout from a subprocess, logging output at debug level.
-
-    Args:
-        proc: Subprocess.Popen instance to read from.
-        name: Label for log messages.
-    """
+    """Drain stdout from a subprocess, logging output at debug level."""
     while proc.poll() is None:
         try:
             line = proc.stdout.readline()
@@ -35,7 +30,7 @@ def drain_process_output(proc, name="tunnel"):
                     logger.debug(f"[{name}] {line_stripped}")
             else:
                 time.sleep(0.5)
-        except (IOError, OSError, ValueError):
+        except Exception:
             break
     logger.warning(f"⚠️ [{name}] Output drain ended (process likely dead)")
 
@@ -45,41 +40,35 @@ def start_tunnel():
     subprocess.run(["pkill", "-f", "cloudflared"], capture_output=True)
     time.sleep(2)
 
-    log_file = open("cloudflared.log", "a")
-    try:
-        proc = subprocess.Popen(
-            [config.CLOUDFLARED_BINARY, "tunnel", "--url", f"http://localhost:{config.SERVER_PORT}"],
-            stdout=log_file,
-            stderr=log_file,
-            start_new_session=True,
-        )
-    except Exception:
-        log_file.close()
-        raise
+    proc = subprocess.Popen(
+        [config.CLOUDFLARED_BINARY, "tunnel", "--url", f"http://localhost:{config.SERVER_PORT}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
 
     url = None
     start = time.time()
     while time.time() - start < config.TUNNEL_START_TIMEOUT:
-        if proc.poll() is not None:
-            log_file.close()
-            logger.error("❌ cloudflared died during startup")
-            return None, None
-        try:
-            with open("cloudflared.log", "r") as f:
-                for line in f:
-                    if "trycloudflare.com" in line:
-                        match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
-                        if match:
-                            url = match.group(0)
-                            break
-            if url:
+        ready, _, _ = select.select([proc.stdout], [], [], 2.0)
+        if not ready:
+            if proc.poll() is not None:
+                logger.error("❌ cloudflared died during startup")
+                return None, None
+            continue
+        line = proc.stdout.readline()
+        if not line:
+            if proc.poll() is not None:
+                logger.error("❌ cloudflared died during startup")
+                return None, None
+            continue
+        if "trycloudflare.com" in line:
+            match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
+            if match:
+                url = match.group(0)
                 break
-        except FileNotFoundError:
-            pass
-        time.sleep(0.5)
 
-    log_file.flush()
-    log_file.close()
     if url:
         public_url = url
         with open("tunnel_url.txt", "w") as f:
@@ -108,6 +97,13 @@ def tunnel_watchdog():
         logger.info("\n" + "=" * 60)
         logger.info(f"🌐 PUBLIC ENDPOINT: {url}/v1")
         logger.info("=" * 60)
+
+        drain_thread = threading.Thread(
+            target=drain_process_output,
+            args=(proc, "cloudflared"),
+            daemon=True,
+        )
+        drain_thread.start()
 
         while proc.poll() is None:
             time.sleep(config.TUNNEL_POLL_INTERVAL)

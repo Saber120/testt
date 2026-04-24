@@ -66,8 +66,8 @@ async def root():
 @app.get("/v1/models")
 async def list_models():
     try:
-        async with http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags") as resp:
-            data = json_loads(await resp.aread())
+        resp = await http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
+        data = json_loads(resp.read())
     except Exception:
         data = {"models": []}
 
@@ -81,6 +81,43 @@ async def list_models():
         })
 
     return JSONResponse(content={"object": "list", "data": models})
+
+
+def _get_ollama_model_name(requested_name: str) -> str:
+    """Map a requested model name to an actual Ollama model, pulling if needed.
+
+    Falls back to config.OLLAMA_MODEL if the requested model is unavailable.
+    """
+    if requested_name == config.OLLAMA_MODEL:
+        return requested_name
+
+    # Quick check: is the model already loaded?
+    try:
+        resp = http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
+        tags = json_loads(resp.read())
+        for m in tags.get("models", []):
+            if m.get("name") == requested_name:
+                return requested_name
+    except Exception:
+        pass
+
+    # Not found — try to pull it
+    logger.info(f"🔻 Model '{requested_name}' not local, pulling...")
+    try:
+        resp = http_client.post(
+            f"{config.OLLAMA_BASE_URL}/api/pull",
+            json={"name": requested_name},
+            timeout=600,
+        )
+        if resp.status_code == 200:
+            logger.info(f"✅ Model '{requested_name}' pulled successfully")
+            return requested_name
+    except Exception as exc:
+        logger.warning(f"⚠️ Failed to pull '{requested_name}': {exc}")
+
+    # Fallback
+    logger.warning(f"⚠️ Falling back to default model: {config.OLLAMA_MODEL}")
+    return config.OLLAMA_MODEL
 
 
 @app.post("/v1/chat/completions")
@@ -101,8 +138,11 @@ async def openai_compatible(request: Request):
     ollama_messages = convert_messages_to_ollama(messages)
     stream = body.get("stream", True)
 
+    # Resolve the actual Ollama model name (pull if needed, fallback otherwise)
+    actual_model = _get_ollama_model_name(model_name)
+
     ollama_payload = {
-        "model": config.OLLAMA_MODEL,
+        "model": actual_model,
         "messages": ollama_messages,
         "stream": stream,
         "think": config.THINK_ENABLED,

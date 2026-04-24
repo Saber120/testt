@@ -288,7 +288,16 @@ def warm_model():
 def keep_model_warm():
     """Periodically send a request to keep the model loaded in GPU."""
     while True:
-        time.sleep(int(config.KEEP_ALIVE.replace("m", "").replace("s", "").replace("h", "")))
+        duration_str = config.KEEP_ALIVE.lower()
+        if duration_str.endswith("m"):
+            wait_seconds = int(duration_str[:-1]) * 60
+        elif duration_str.endswith("h"):
+            wait_seconds = int(duration_str[:-1]) * 3600
+        elif duration_str.endswith("s"):
+            wait_seconds = int(duration_str[:-1])
+        else:
+            wait_seconds = int(duration_str)
+        time.sleep(wait_seconds)
         try:
             payload = json.dumps({
                 "model": config.OLLAMA_MODEL,

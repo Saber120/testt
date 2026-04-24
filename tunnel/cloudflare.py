@@ -46,17 +46,22 @@ def start_tunnel():
     time.sleep(2)
 
     log_file = open("cloudflared.log", "a")
-    proc = subprocess.Popen(
-        [config.CLOUDFLARED_BINARY, "tunnel", "--url", f"http://localhost:{config.SERVER_PORT}"],
-        stdout=log_file,
-        stderr=log_file,
-        start_new_session=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            [config.CLOUDFLARED_BINARY, "tunnel", "--url", f"http://localhost:{config.SERVER_PORT}"],
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
+    except Exception:
+        log_file.close()
+        raise
 
     url = None
     start = time.time()
     while time.time() - start < config.TUNNEL_START_TIMEOUT:
         if proc.poll() is not None:
+            log_file.close()
             logger.error("❌ cloudflared died during startup")
             return None, None
         try:
@@ -74,6 +79,7 @@ def start_tunnel():
         time.sleep(0.5)
 
     log_file.flush()
+    log_file.close()
     if url:
         public_url = url
         with open("tunnel_url.txt", "w") as f:

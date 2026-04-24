@@ -206,9 +206,6 @@ def _run_everything():
     """Core startup logic (runs in main thread or background thread)."""
     ollama_process = None
 
-    if not SKIP_INSTALL:
-        run_install_script()
-
     cleanup()
 
     ollama_process = start_ollama()
@@ -250,6 +247,9 @@ def main():
     args = parse_args()
     apply_config_overrides(args)
     SKIP_INSTALL = args.skip_install
+
+    if not SKIP_INSTALL:
+        run_install_script()
 
     animate_logo()
 

@@ -421,22 +421,26 @@ def main():
         bg.start()
         print("  📓 Starting in background...\n")
 
-        # Wait up to 90s for the server to be reachable
+        # Wait up to 90s for the server + tunnel to be ready
         import urllib.request as _ur
-        ready = False
+        server_ready = False
         for _ in range(90):
             time.sleep(1)
             try:
                 _ur.urlopen("http://127.0.0.1:8000/health", timeout=2)
-                ready = True
+                server_ready = True
                 break
             except Exception:
                 pass
 
-        if ready:
+        if server_ready:
             print("  📓 Server ready — cell/terminal is free.\n")
-            print("  Local:  http://localhost:8000/v1")
-            print("  Tunnel: check logs for Cloudflare URL\n")
+            print(f"  Local:  http://localhost:{config.SERVER_PORT}/v1")
+            if cloudflare.public_url:
+                print(f"  Public: {cloudflare.public_url}/v1")
+            else:
+                print("  Public: tunnel still establishing (check tunnel_url.txt)")
+            print()
         else:
             print("  ⚠️  Server did not become ready in 90s (still starting).\n")
         return

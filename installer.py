@@ -102,11 +102,15 @@ def run_install_script():
     bar = IndeterminateBar("Installing Python deps")
     req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "-r", req_path],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        [sys.executable, "-m", "pip", "install", "--upgrade", "-r", req_path],
+        capture_output=True,
     )
     if result.returncode != 0:
-        bar.fail(f"pip install failed: {result.stderr.decode()[:80]}")
+        bar.fail(f"pip install failed")
     else:
+        for name in read_requirements():
+            clean = name.lower().replace("-", "_")
+            if clean in sys.modules:
+                del sys.modules[clean]
         bar.done("Python packages ready")
     print()

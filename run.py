@@ -15,6 +15,35 @@ import threading
 import urllib.request
 import urllib.error
 
+# ── Install deps FIRST before any third-party imports ──
+
+def _ensure_deps(args):
+    """Install system + Python dependencies before anything else."""
+    from installer import run_install_script
+    from progress import IndeterminateBar
+
+    skip = getattr(args, "skip_install", False)
+    if not skip:
+        run_install_script()
+
+
+def _parse_args_early():
+    """Minimal arg parse just to check --skip-install."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-install", action="store_true", default=False)
+    parser.add_argument("--models", type=str, default=None)
+    parser.add_argument("--num-ctx", type=int, default=None)
+    parser.add_argument("--keep-alive", type=str, default=None)
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--no-think", action="store_true", default=False)
+    return parser.parse_args()
+
+
+_early_args = _parse_args_early()
+_ensure_deps(_early_args)
+
+# ── Now safe to import everything ──
+
 import config
 from server.utils import logger
 from server.app import run_server

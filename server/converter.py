@@ -4,7 +4,7 @@ Handles role mapping, content extraction, and tool call translation
 between the two API formats.
 """
 
-from .utils import json_loads, json_dumps
+from .utils import json_loads, json_dumps, logger
 
 
 def extract_text_content(content):
@@ -68,6 +68,9 @@ def convert_messages_to_ollama(messages):
             ollama_messages.append(asst_msg)
         elif role == "system":
             ollama_messages.append({"role": "system", "content": content})
-        elif role == "user" and content.strip():
-            ollama_messages.append({"role": "user", "content": content})
+        elif role == "user":
+            if not content.strip():
+                logger.warning("Empty user message skipped")
+            else:
+                ollama_messages.append({"role": "user", "content": content})
     return ollama_messages

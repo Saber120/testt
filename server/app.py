@@ -7,8 +7,6 @@ to a local Ollama instance, handling format conversion and streaming.
 import time
 import uuid
 import asyncio
-import orjson
-import uvloop
 import uvicorn
 
 import httpx
@@ -68,7 +66,8 @@ async def list_models():
     try:
         resp = await http_client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
         data = json_loads(resp.read())
-    except Exception:
+    except Exception as exc:
+        logger.debug(f"Failed to fetch models from Ollama: {exc}")
         data = {"models": []}
 
     models = []
@@ -156,8 +155,10 @@ async def openai_compatible(request: Request):
 
     try:
         raw_body = await request.body()
+        if not raw_body:
+            raise ValueError("empty request body")
         body = json_loads(raw_body)
-    except (ValueError, orjson.JSONDecodeError) as e:
+    except ValueError as e:
         logger.error(f"[{request_id}] ❌ Invalid JSON: {e}")
         error_payload = {"error": {"message": "Invalid request body", "type": "invalid_request_error"}}
         return JSONResponse(content=error_payload, status_code=400)
@@ -303,18 +304,36 @@ async def openai_compatible(request: Request):
 
 def run_server():
     logger.info(f"🚀 Starting FastAPI on {config.SERVER_HOST}:{config.SERVER_PORT}")
-    uvloop.install()
-    uvicorn_config = uvicorn.Config(
-        app,
-        host=config.SERVER_HOST,
-        port=config.SERVER_PORT,
-        log_level=config.UVICORN_LOG_LEVEL,
-        access_log=config.UVICORN_ACCESS_LOG,
-        timeout_keep_alive=config.UVICORN_TIMEOUT_KEEP_ALIVE,
-        timeout_notify=config.UVICORN_TIMEOUT_NOTIFY,
-        http="httptools",
-        loop="uvloop",
-    )
+
+    uvloop_installed = True
+    try:
+        import uvloop
+        uvloop.install()
+    except (ImportError, RuntimeError):
+        uvloop_installed = False
+
+    httptools_installed = True
+    try:
+        import httptools
+    except ImportError:
+        httptools_installed = False
+
+    uvicorn_kwargs = {
+        "app": app,
+        "host": config.SERVER_HOST,
+        "port": config.SERVER_PORT,
+        "log_level": config.UVICORN_LOG_LEVEL,
+        "access_log": config.UVICORN_ACCESS_LOG,
+        "timeout_keep_alive": config.UVICORN_TIMEOUT_KEEP_ALIVE,
+        "timeout_notify": config.UVICORN_TIMEOUT_NOTIFY,
+    }
+
+    if httptools_installed:
+        uvicorn_kwargs["http"] = "httptools"
+    if uvloop_installed:
+        uvicorn_kwargs["loop"] = "uvloop"
+
+    uvicorn_config = uvicorn.Config(**uvicorn_kwargs)
     server = uvicorn.Server(uvicorn_config)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

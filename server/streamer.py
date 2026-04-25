@@ -53,9 +53,10 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
 
                 next_item_task = asyncio.ensure_future(aiter.__anext__())
 
+                pending_tasks = set()
                 try:
                     while True:
-                        done, pending = await asyncio.wait({next_item_task}, timeout=15.0)
+                        done, pending_tasks = await asyncio.wait({next_item_task}, timeout=15.0)
 
                         if not done:
                             logger.info(f"[{request_id}] 💓 Keep-alive ping (model thinking...)")

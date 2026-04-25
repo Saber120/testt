@@ -4,12 +4,12 @@ Starts and monitors a Cloudflare tunnel process, providing a public
 URL that proxies to the local FastAPI server.
 """
 
-import re
-import time
 import os
+import re
 import signal
 import select
 import subprocess
+import time
 import threading
 
 import config
@@ -50,18 +50,17 @@ def start_tunnel():
 
     url = None
     start = time.time()
+    readline_lock = threading.Lock()
     while time.time() - start < config.TUNNEL_START_TIMEOUT:
-        ready, _, _ = select.select([proc.stdout], [], [], 2.0)
-        if not ready:
+        with readline_lock:
             if proc.poll() is not None:
                 logger.error("❌ cloudflared died during startup")
                 return None, None
-            continue
-        line = proc.stdout.readline()
+            ready, _, _ = select.select([proc.stdout], [], [], 2.0)
+            if not ready:
+                continue
+            line = proc.stdout.readline()
         if not line:
-            if proc.poll() is not None:
-                logger.error("❌ cloudflared died during startup")
-                return None, None
             continue
         if "trycloudflare.com" in line:
             match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
@@ -93,10 +92,6 @@ def tunnel_watchdog():
 
         restart_count = 0
         tunnel_process = proc
-
-        logger.info("\n" + "=" * 60)
-        logger.info(f"🌐 PUBLIC ENDPOINT: {url}/v1")
-        logger.info("=" * 60)
 
         drain_thread = threading.Thread(
             target=drain_process_output,

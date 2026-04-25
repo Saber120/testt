@@ -255,13 +255,37 @@ def _run_everything():
     warm_thread = threading.Thread(target=keep_model_warm, daemon=True)
     warm_thread.start()
 
-    time.sleep(10)
-    if cloudflare.public_url:
+    # Wait for tunnel to be ready and verify it's alive
+    import urllib.request as _urllib
+    max_wait = 90
+    start_time = time.time()
+    alive = False
+    while time.time() - start_time < max_wait:
+        if cloudflare.public_url:
+            try:
+                req = _urllib.Request(f"{cloudflare.public_url}/v1", method="HEAD")
+                with _urllib.urlopen(req, timeout=5) as resp:
+                    if resp.status < 500:
+                        alive = True
+                        break
+            except Exception:
+                pass
+        time.sleep(2)
+
+    if not alive and cloudflare.public_url:
+        logger.warning("⚠️ Tunnel link dead, restarting cloudflared...")
+        cloudflare.tunnel_process = None
+        cloudflare.public_url = None
+        cloudflare.start_tunnel()
+        time.sleep(5)
+        alive = cloudflare.public_url is not None
+
+    if alive and cloudflare.public_url:
         print(f"\n  {'=' * 60}")
         print(f"  ✅ SERVER READY: {cloudflare.public_url}/v1")
         print(f"  {'=' * 60}\n")
     else:
-        logger.error("❌ Tunnel not ready yet")
+        logger.error("❌ Tunnel not ready after timeout")
 
     return ollama_process
 

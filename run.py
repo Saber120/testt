@@ -275,8 +275,7 @@ def main():
     apply_config_overrides(args)
     SKIP_INSTALL = args.skip_install
 
-    if not SKIP_INSTALL:
-        run_install_script()
+    # Already installed at module load time, don't run again
 
     animate_logo()
 

@@ -9,7 +9,6 @@ _RED_ = "\033[91m"
 _CYAN_ = "\033[96m"
 _YELLOW_ = "\033[93m"
 _GREEN_ = "\033[92m"
-_BOLD_ = "\033[1m"
 _RST_ = "\033[0m"
 
 
@@ -21,9 +20,9 @@ def animate_logo():
     """Print an animated ASCII logo."""
     os.system("clear" if os.name != "nt" else "cls")
 
-    import pyfiglet
+    from art import text2art
 
-    banner = pyfiglet.figlet_format("RAGNAROK", font="doom")
+    banner = text2art("RAGNAROK", font="block")
     lines = banner.split("\n")
 
     print()
@@ -39,7 +38,7 @@ def animate_logo():
 
     taglines = [
         ("  OpenAI-Compatible Proxy", _CYAN_),
-        ("  Kaggle GPU  \u2192  Public API", _YELLOW_),
+        ("  Kaggle GPU  →  Public API", _YELLOW_),
     ]
 
     for text, color in taglines:
@@ -49,7 +48,7 @@ def animate_logo():
         print()
     print()
 
-    footer = "  Free LLM API \u2014 no key, no bill, just free GPU hours"
+    footer = "  Free LLM API — no key, no bill, just free GPU hours"
     for ch in footer:
         print(_c(ch, _GREEN_), end="", flush=True)
         time.sleep(0.012)

@@ -98,12 +98,15 @@ def run_install_script():
     else:
         print("  \u2705 cloudflared already downloaded")
 
-    # 5. Python packages (always reinstall to pick up new deps)
+    # 5. Python packages (always upgrade to pick up new deps)
     bar = IndeterminateBar("Installing Python deps")
     req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-q", "-r", req_path],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "-r", req_path],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
     )
-    bar.done("Python packages ready")
+    if result.returncode != 0:
+        bar.fail(f"pip install failed: {result.stderr.decode()[:80]}")
+    else:
+        bar.done("Python packages ready")
     print()

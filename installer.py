@@ -7,7 +7,7 @@ import subprocess
 import shutil
 
 import config
-from progress import ProgressBar, download_with_progress
+from progress import LineProgressBar, download_with_progress, run_with_progress
 
 
 def is_installed(name):
@@ -48,7 +48,7 @@ def run_install_script():
 
     # 1. apt-get update (only if ollama or zstd missing)
     if not is_installed("ollama") or not is_installed("zstd"):
-        bar = ProgressBar("Updating apt")
+        bar = IndeterminateBar("Updating apt")
         subprocess.run(["sudo", "apt-get", "update", "-qq"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         bar.done("apt updated")
@@ -57,7 +57,7 @@ def run_install_script():
 
     # 2. Install zstd
     if not is_installed("zstd"):
-        bar = ProgressBar("Installing zstd")
+        bar = IndeterminateBar("Installing zstd")
         subprocess.run(["sudo", "apt-get", "install", "-y", "-qq", "zstd"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         bar.done("zstd installed")
@@ -66,7 +66,7 @@ def run_install_script():
 
     # 3. Install Ollama
     if not is_installed("ollama"):
-        bar = ProgressBar("Installing Ollama")
+        bar = IndeterminateBar("Installing Ollama")
         install_script = "/tmp/ollama-install.sh"
         try:
             subprocess.run(
@@ -89,19 +89,18 @@ def run_install_script():
     # 4. Download cloudflared (skip if binary exists and is executable)
     cf_path = config.CLOUDFLARED_BINARY
     if not (os.path.exists(cf_path) and os.access(cf_path, os.X_OK)):
-        bar = ProgressBar("Downloading cloudflared")
         try:
             download_with_progress(config.CLOUDFLARED_URL, cf_path)
             os.chmod(cf_path, 0o755)
-            bar.done("cloudflared downloaded")
+            print("  \u2705 cloudflared downloaded")
         except Exception:
-            bar.fail("cloudflared download")
+            print("  \u274c cloudflared download failed")
     else:
         print("  \u2705 cloudflared already downloaded")
 
     # 5. Python packages
     if not pip_packages_present():
-        bar = ProgressBar("Installing Python deps")
+        bar = IndeterminateBar("Installing Python deps")
         req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q", "-r", req_path],

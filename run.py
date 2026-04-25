@@ -21,7 +21,7 @@ from server.app import run_server
 from tunnel import cloudflare
 from tunnel.keepalive import keep_alive_ping
 from logo import animate_logo
-from progress import ProgressBar
+from progress import LineProgressBar, IndeterminateBar
 from installer import run_install_script
 
 
@@ -29,7 +29,7 @@ from installer import run_install_script
 
 def start_ollama():
     """Start Ollama serve as a background process."""
-    bar = ProgressBar("Starting Ollama")
+    bar = IndeterminateBar("Starting Ollama")
     devnull = open(os.devnull, "w")
     try:
         process = subprocess.Popen(["ollama", "serve"], stdout=devnull, stderr=devnull)
@@ -98,7 +98,7 @@ def _warm_request(model, timeout=300):
 
 def warm_model():
     """Load model into GPU memory."""
-    bar = ProgressBar(f"Warming {config.OLLAMA_MODEL}")
+    bar = IndeterminateBar(f"Warming {config.OLLAMA_MODEL}")
     try:
         _warm_request(config.OLLAMA_MODEL, timeout=300)
         bar.done("Model loaded into GPU")

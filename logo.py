@@ -13,58 +13,45 @@ _BOLD_ = "\033[1m"
 _RST_ = "\033[0m"
 
 
-def _colorize(text, color):
+def _c(text, color):
     return f"{color}{text}{_RST_}"
 
 
 def animate_logo():
-    """Print an animated ASCII logo with color effects."""
+    """Print an animated ASCII logo."""
     os.system("clear" if os.name != "nt" else "cls")
 
-    try:
-        import pyfiglet
-        banner = pyfiglet.figlet_format("RAGNAROK", font="doom")
-    except ImportError:
-        banner = (
-            "  ___           _   _             _       __       _\n"
-            " / __|_ _ _ __ | |_| |__   ____ _| |_    / /_  ___| |\n"
-            "\\__ \\| '_| '_ \\|  _| / /| / / _' |  _|  / / _ \\/ __|\n"
-            " ___) | | | | | | | | | |_| | (_| | |___/ /  __\\__ \\\n"
-            "|____/|_| |_| |_| |_| |_|\\___\\__,_|_____/_/\\___||_/\n"
-        )
+    import pyfiglet
+
+    banner = pyfiglet.figlet_format("RAGNAROK", font="doom")
     lines = banner.split("\n")
 
-    # Typewriter-style reveal with color
     print()
     for line in lines:
         for ch in line:
             if ch == " ":
                 print(" ", end="", flush=True)
             else:
-                print(_colorize(ch, _RED_), end="", flush=True)
-            time.sleep(0.005)
+                print(_c(ch, _RED_), end="", flush=True)
+            time.sleep(0.003)
         print()
     print()
 
-    time.sleep(0.3)
+    taglines = [
+        ("  OpenAI-Compatible Proxy", _CYAN_),
+        ("  Kaggle GPU  \u2192  Public API", _YELLOW_),
+    ]
 
-    tagline1 = "  OpenAI-Compatible Proxy"
-    tagline2 = "  Kaggle GPU  \u2192  Public API"
-
-    for ch in tagline1:
-        print(_colorize(ch, _CYAN_), end="", flush=True)
-        time.sleep(0.02)
+    for text, color in taglines:
+        for ch in text:
+            print(_c(ch, color), end="", flush=True)
+            time.sleep(0.02)
+        print()
     print()
 
-    for ch in tagline2:
-        print(_colorize(ch, _YELLOW_), end="", flush=True)
-        time.sleep(0.02)
-    print()
-    print()
-
-    subtitle = "  Free LLM API \u2014 no key, no bill, just free GPU hours"
-    for ch in subtitle:
-        print(_colorize(ch, _GREEN_), end="", flush=True)
-        time.sleep(0.015)
+    footer = "  Free LLM API \u2014 no key, no bill, just free GPU hours"
+    for ch in footer:
+        print(_c(ch, _GREEN_), end="", flush=True)
+        time.sleep(0.012)
     print()
     print()

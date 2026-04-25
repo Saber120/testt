@@ -43,8 +43,9 @@ def start_ollama():
 
 
 def pull_model():
-    """Pull the Ollama model with clean progress from Ollama's JSON output."""
-    print(f"\n  ⬇️  Pulling model: {config.OLLAMA_MODEL}")
+    """Pull the Ollama model with a progress bar from Ollama's JSON output."""
+    print()
+    bar = LineProgressBar(f"Pulling {config.OLLAMA_MODEL}")
     proc = subprocess.Popen(
         ["ollama", "pull", config.OLLAMA_MODEL],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -67,18 +68,15 @@ def pull_model():
                     pct = int(completed * 100 / total)
                     mb_done = completed // (1024 * 1024)
                     mb_total = total // (1024 * 1024)
-                    msg = f"  ⬇️  {config.OLLAMA_MODEL}: {status}  {mb_done}MB/{mb_total}MB ({pct}%)"
+                    bar.step(pct, f"{status}  {mb_done}MB/{mb_total}MB")
                 else:
-                    pct = -1
-                    msg = f"  ⬇️  {config.OLLAMA_MODEL}: {status}"
-                if pct != last_pct or status != last_status:
-                    print(f"\r{msg}", end="", flush=True)
-                    last_pct = pct
-                    last_status = status
+                    bar.spin(status)
+                last_pct = pct if total and completed else last_pct
+                last_status = status
         raw = proc.stderr.readline()
 
     proc.wait()
-    print(f"\r  ✅ {config.OLLAMA_MODEL} ready\n", flush=True)
+    bar.done(f"{config.OLLAMA_MODEL} ready")
 
 
 def _warm_request(model, timeout=300):

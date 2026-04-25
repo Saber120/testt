@@ -98,15 +98,12 @@ def run_install_script():
     else:
         print("  \u2705 cloudflared already downloaded")
 
-    # 5. Python packages
-    if not pip_packages_present():
-        bar = IndeterminateBar("Installing Python deps")
-        req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "-r", req_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-        )
-        bar.done("Python packages ready")
-    else:
-        print("  \u2705 Python packages already installed")
+    # 5. Python packages (always reinstall to pick up new deps)
+    bar = IndeterminateBar("Installing Python deps")
+    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q", "-r", req_path],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    bar.done("Python packages ready")
     print()

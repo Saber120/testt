@@ -61,6 +61,12 @@ async def root():
     return {"status": "ollama-proxy running", "model": config.MODEL_NAME}
 
 
+@app.get("/v1")
+@app.head("/v1")
+async def v1_root():
+    return {"status": "ok"}
+
+
 @app.get("/v1/models")
 async def list_models():
     try:

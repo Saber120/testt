@@ -39,6 +39,7 @@ class LineProgressBar:
         """Update percentage and status text."""
         self._pct = min(100, max(0, pct))
         self._status = status
+        self._spin_idx += 1
         self._render()
 
     def spin(self, status=""):

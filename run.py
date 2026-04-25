@@ -78,6 +78,7 @@ def pull_model():
     proc = subprocess.Popen(
         ["ollama", "pull", config.OLLAMA_MODEL],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        bufsize=1,
     )
     last_pct = -1
     last_status = ""

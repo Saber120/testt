@@ -7,7 +7,7 @@ import subprocess
 import shutil
 
 import config
-from progress import LineProgressBar, download_with_progress, run_with_progress
+from progress import LineProgressBar, IndeterminateBar, download_with_progress, run_with_progress
 
 
 def is_installed(name):

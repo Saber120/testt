@@ -73,7 +73,7 @@ class IndeterminateBar:
         self._lock = threading.Lock()
         self._pos = 0
         self._direction = 1
-        print(f"  {' ' * self.length}   0%%  {label}..", flush=True)
+        print(f"  {' ' * self.length}   0%  {label}..", flush=True)
         self._thread = threading.Thread(target=self._animate, daemon=True)
         self._thread.start()
 
@@ -144,8 +144,6 @@ def download_with_progress(url, dest, label="Downloading"):
 def run_with_progress(cmd, label, shell=False):
     """Run a command with an indeterminate animated bar (dedicated line)."""
     bar = IndeterminateBar(label)
-    thread = threading.Thread(target=bar.animate, daemon=True)
-    thread.start()
 
     try:
         result = subprocess.run(

@@ -21,9 +21,17 @@ def animate_logo():
     """Print an animated ASCII logo with color effects."""
     os.system("clear" if os.name != "nt" else "cls")
 
-    import pyfiglet
-
-    banner = pyfiglet.figlet_format("RAGNAROK", font="doom")
+    try:
+        import pyfiglet
+        banner = pyfiglet.figlet_format("RAGNAROK", font="doom")
+    except ImportError:
+        banner = (
+            "  ___           _   _             _       __       _\n"
+            " / __|_ _ _ __ | |_| |__   ____ _| |_    / /_  ___| |\n"
+            "\\__ \\| '_| '_ \\|  _| / /| / / _' |  _|  / / _ \\/ __|\n"
+            " ___) | | | | | | | | | |_| | (_| | |___/ /  __\\__ \\\n"
+            "|____/|_| |_| |_| |_| |_|\\___\\__,_|_____/_/\\___||_/\n"
+        )
     lines = banner.split("\n")
 
     # Typewriter-style reveal with color

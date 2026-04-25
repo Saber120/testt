@@ -78,13 +78,13 @@ def pull_model():
     proc = subprocess.Popen(
         ["ollama", "pull", config.OLLAMA_MODEL],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        bufsize=1,
+        text=True,
     )
     last_pct = -1
     last_status = ""
     raw = proc.stderr.readline()
     while raw:
-        line = raw.decode("utf-8", errors="replace").strip()
+        line = raw.strip()
         if line:
             try:
                 data = json.loads(line)

@@ -155,23 +155,47 @@ def cleanup():
     logger.info("✅ Cleanup complete")
 
 
+def _parse_keep_alive_duration(duration_str: str) -> int:
+    """Parse a keep-alive duration string into seconds."""
+    s = duration_str.lower()
+    if s.endswith("m"):
+        return int(s[:-1]) * 60
+    elif s.endswith("h"):
+        return int(s[:-1]) * 3600
+    elif s.endswith("s"):
+        return int(s[:-1])
+    else:
+        return int(s)
+
+
+def _is_model_loaded(model: str) -> bool:
+    """Check if the model is currently loaded in Ollama."""
+    try:
+        req = urllib.request.Request(
+            f"{config.OLLAMA_BASE_URL}/api/tags", method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            for m in data.get("models", []):
+                if m.get("name") == model:
+                    loaded_models = m.get("loaded_at")
+                    if loaded_models:
+                        return True
+    except Exception:
+        pass
+    return False
+
+
 def keep_model_warm():
     """Periodically send a request to keep the model loaded in GPU."""
+    wait_seconds = _parse_keep_alive_duration(config.KEEP_ALIVE)
     while True:
-        duration_str = config.KEEP_ALIVE.lower()
-        if duration_str.endswith("m"):
-            wait_seconds = int(duration_str[:-1]) * 60
-        elif duration_str.endswith("h"):
-            wait_seconds = int(duration_str[:-1]) * 3600
-        elif duration_str.endswith("s"):
-            wait_seconds = int(duration_str[:-1])
-        else:
-            wait_seconds = int(duration_str)
         time.sleep(wait_seconds)
-        try:
-            _warm_request(config.OLLAMA_MODEL, timeout=60)
-        except Exception:
-            pass
+        if not _is_model_loaded(config.OLLAMA_MODEL):
+            try:
+                _warm_request(config.OLLAMA_MODEL, timeout=60)
+            except Exception:
+                pass
 
 
 # ─── Shutdown ─────────────────────────────────────────────────────────────────

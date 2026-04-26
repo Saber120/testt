@@ -186,6 +186,7 @@ async def openai_compatible(request: Request):
         "options": {
             "num_ctx": config.NUM_CTX,
             "num_predict": config.NUM_PREDICT,
+            "num_gpu": -1,
         },
     }
     if "tools" in body and body["tools"]:

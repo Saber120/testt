@@ -13,8 +13,8 @@ SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8000
 
 # Ollama request options
-NUM_CTX = 62768
-NUM_PREDICT = 62768
+NUM_CTX = 32768
+NUM_PREDICT = 8192
 KEEP_ALIVE = "60m"
 
 # Think mode

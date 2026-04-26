@@ -61,6 +61,11 @@ async def root():
     return {"status": "ollama-proxy running", "model": config.MODEL_NAME}
 
 
+@app.get("/v1")
+@app.head("/v1")
+async def v1_root():
+    return {"status": "ok"}
+
 
 @app.post("/v1/chat/completions")
 async def openai_compatible(request: Request):

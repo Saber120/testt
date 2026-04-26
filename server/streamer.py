@@ -4,8 +4,6 @@ import uuid
 import time
 import queue
 import threading
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -17,18 +15,14 @@ try:
 except ImportError:
     orjson = None
 
-# Shared pool for Ollama fetch threads
-_fetch_pool = ThreadPoolExecutor(max_workers=50, thread_name_prefix="ollama-fetch")
-
 
 def _ollama_fetch_thread(
-    ollama_base_url: str,
-    ollama_payload: dict,
-    result_queue: queue.Queue,
-    request_id: str,
-    total_timeout: float,
+    ollama_base_url,
+    ollama_payload,
+    result_queue,
+    request_id,
+    total_timeout,
 ):
-    """Runs in a dedicated thread. Fetches from Ollama and puts lines in result_queue."""
     start = time.time()
     try:
         with httpx.Client(
@@ -41,7 +35,6 @@ def _ollama_fetch_thread(
                     return
 
                 for line in resp.iter_lines():
-                    # Thread-level total timeout
                     if time.time() - start > total_timeout:
                         result_queue.put(("timeout", "Model generation timed out"))
                         return
@@ -49,7 +42,6 @@ def _ollama_fetch_thread(
                         continue
                     result_queue.put(("line", line))
 
-                # Normal completion
                 result_queue.put(("done", None))
     except httpx.ConnectTimeout:
         result_queue.put(("error", "Ollama ConnectTimeout"))
@@ -66,18 +58,14 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
         has_tool_calls = False
         start_time = time.time()
 
-        def format_error(msg: str, err_type: str = "api_error") -> bytes:
+        def format_error(msg, err_type="api_error"):
             err_obj = {"error": {"message": msg, "type": err_type, "param": None, "code": None}}
             dumps_fn = orjson.dumps if orjson else lambda o: json_dumps(o).encode()
             return b"data: " + dumps_fn(err_obj) + b"\n\ndata: [DONE]\n\n"
 
-        # Create a queue for the fetch thread to push lines into
         q = queue.Queue(maxsize=256)
-
-        # Total request timeout: 10 minutes (600s)
         TOTAL_TIMEOUT = 600.0
 
-        # Start the fetch thread
         t = threading.Thread(
             target=_ollama_fetch_thread,
             args=(ollama_base_url, ollama_payload, q, request_id, TOTAL_TIMEOUT),
@@ -85,24 +73,9 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
         )
         t.start()
 
-        POLL_INTERVAL = 3.0
-        MAX_CONSECUTIVE_TIMEOUTS = int(TOTAL_TIMEOUT // POLL_INTERVAL) + 1
-        timeout_counter = 0
-
         try:
             while True:
-                # Poll the queue
-                try:
-                    msg_type, payload = q.get(timeout=POLL_INTERVAL)
-                except queue.Empty:
-                    timeout_counter += 1
-                    if timeout_counter > MAX_CONSECUTIVE_TIMEOUTS:
-                        logger.error(f"[{request_id}] Total request timeout exceeded")
-                        yield format_error("Request timeout exceeded", "timeout")
-                        return
-                    logger.info(f"[{request_id}] Keep-alive ping (model thinking...)")
-                    yield b": keep-alive\n\n"
-                    continue
+                msg_type, payload = q.get(timeout=600)
 
                 if msg_type == "error":
                     logger.error(f"[{request_id}] Error: {payload}")
@@ -129,7 +102,6 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
                     yield b"data: [DONE]\n\n"
                     return
 
-                # msg_type == "line"
                 line = payload
                 try:
                     data = json_loads(line)

@@ -47,14 +47,14 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
                 async with client.stream("POST", f"{base_url}/api/chat", json=payload) as resp:
                     if resp.status_code != 200:
                         await resp.aread()
-                        queue.put((f"http_error:{resp.status_code}", None))
+                        await queue.put((f"http_error:{resp.status_code}", None))
                         return
 
                     async for line in resp.aiter_lines():
-                        queue.put(("line", line))
-                    queue.put(("done", None))
+                        await queue.put(("line", line))
+                    await queue.put(("done", None))
             except Exception as e:
-                queue.put(("error", str(e)))
+                await queue.put(("error", str(e)))
 
         try:
             yield _sse_ping()
@@ -68,7 +68,7 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
             done = False
             while not done:
                 try:
-                    msg_type, payload_item = asyncio.wait_for(queue.get(), timeout=ping_interval)
+                    msg_type, payload_item = await asyncio.wait_for(queue.get(), timeout=ping_interval)
                 except asyncio.TimeoutError:
                     yield _sse_ping()
                     _send_ping_if_needed.last_send = time.time()

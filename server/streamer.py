@@ -41,40 +41,32 @@ def make_stream_generator(ollama_base_url, model_name, ollama_payload, request_i
 
         _send_ping_if_needed.last_send = time.time()
 
-        def _stream_reader(client, base_url, payload, queue, error_flag):
+        async def _stream_reader(client, base_url, payload, queue):
             """Background task that reads from Ollama and pushes lines to queue."""
-            async def reader():
-                try:
-                    async with client.stream("POST", f"{base_url}/api/chat", json=payload) as resp:
-                        if resp.status_code != 200:
-                            await resp.aread()
-                            queue.put((f"http_error:{resp.status_code}", None))
-                            return
+            try:
+                async with client.stream("POST", f"{base_url}/api/chat", json=payload) as resp:
+                    if resp.status_code != 200:
+                        await resp.aread()
+                        queue.put((f"http_error:{resp.status_code}", None))
+                        return
 
-                        async for line in resp.aiter_lines():
-                            queue.put(("line", line))
-                        queue.put(("done", None))
-                except Exception as e:
-                    queue.put(("error", str(e)))
-            return reader
+                    async for line in resp.aiter_lines():
+                        queue.put(("line", line))
+                    queue.put(("done", None))
+            except Exception as e:
+                queue.put(("error", str(e)))
 
         try:
-            # Send initial ping immediately to establish the stream
             yield _sse_ping()
             _send_ping_if_needed.last_send = time.time()
 
             queue = asyncio.Queue(maxsize=256)
-            reader_task = asyncio.create_task(_stream_reader(http_client, ollama_base_url, ollama_payload, queue, None))
+            reader_task = asyncio.create_task(
+                _stream_reader(http_client, ollama_base_url, ollama_payload, queue)
+            )
 
             done = False
             while not done:
-                # Send ping while waiting for data (handles cold start / model loading)
-                ping_check = _send_ping_if_needed()
-                try:
-                    next(ping_check)
-                except StopIteration:
-                    pass
-
                 try:
                     msg_type, payload_item = asyncio.wait_for(queue.get(), timeout=ping_interval)
                 except asyncio.TimeoutError:
